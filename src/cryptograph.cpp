@@ -212,3 +212,223 @@ std::string CryptoManager::hashFile(const std::string &filePath)
 
     return ss.str();
 }
+
+// sign file
+bool CryptoManager::signFile(const std::string &filePath, const std::string &signatureFile)
+{
+    // load the private key from a PEM file. For demo purposes, assume the key is stored in "private.pem".
+    FILE *privateKeyFile = fopen("private.pem", "r");
+    if (!privateKeyFile)
+    {
+        std::cerr << "Unable to open private key file.\n";
+        return false;
+    }
+
+    EVP_PKEY *privateKey = PEM_read_PrivateKey(privateKeyFile, NULL, NULL, NULL);
+    fclose(privateKeyFile);
+    if (!privateKey)
+    {
+        std::cerr << "Failed to read private key.\n";
+        return false;
+    }
+
+    // initialize signing context.
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx)
+    {
+        std::cerr << "Failed to create EVP_MD_CTX.\n";
+        EVP_PKEY_free(privateKey);
+        return false;
+    }
+
+    if (1 != EVP_SignInit(ctx, EVP_sha256()))
+    {
+        std::cerr << "EVP_SignInit failed.\n";
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(privateKey);
+        return false;
+    }
+
+    // open the file
+    std::ifstream file(filePath, std::ifstream::binary);
+    if (!file)
+    {
+        std::cerr << "Unable to open file for signing: " << filePath << "\n";
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(privateKey);
+        return false;
+    }
+
+    char buffer[8192];
+    // read the file in chunks and update the digest.
+    while (file.read(buffer, sizeof(buffer)))
+    {
+        if (1 != EVP_SignUpdate(ctx, buffer, file.gcount()))
+        {
+            std::cerr << "EVP_SignUpdate failed.\n";
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(privateKey);
+            return false;
+        }
+    }
+    // handle any remaining bytes.
+    if (file.gcount() > 0)
+    {
+        if (1 != EVP_SignUpdate(ctx, buffer, file.gcount()))
+        {
+            std::cerr << "EVP_SignUpdate failed.\n";
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(privateKey);
+            return false;
+        }
+    }
+
+    // allocate memory for the signature.
+    unsigned int sigLen = EVP_PKEY_size(privateKey);
+    unsigned char *signature = new unsigned char[sigLen];
+
+    // finalize the signing operation.
+    if (1 != EVP_SignFinal(ctx, signature, &sigLen, privateKey))
+    {
+        std::cerr << "EVP_SignFinal failed.\n";
+        delete[] signature;
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(privateKey);
+        return false;
+    }
+
+    // write the signature to the signature file.
+    std::ofstream sigFile(signatureFile, std::ofstream::binary);
+    if (!sigFile)
+    {
+        std::cerr << "Unable to open signature file for writing: " << signatureFile << "\n";
+        delete[] signature;
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(privateKey);
+        return false;
+    }
+    sigFile.write(reinterpret_cast<char *>(signature), sigLen);
+
+    // cleanup.
+    delete[] signature;
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(privateKey);
+
+    return true;
+}
+
+// verify signature
+bool CryptoManager::verifyFile(const std::string &filePath, const std::string &signatureFile)
+{
+    // load the public key from a PEM file. For demo purposes, assume the key is stored in "public.pem".
+    FILE *publicKeyFile = fopen("public.pem", "r");
+    if (!publicKeyFile)
+    {
+        std::cerr << "Unable to open public key file.\n";
+        return false;
+    }
+
+    EVP_PKEY *publicKey = PEM_read_PUBKEY(publicKeyFile, NULL, NULL, NULL);
+    fclose(publicKeyFile);
+    if (!publicKey)
+    {
+        std::cerr << "Failed to read public key.\n";
+        return false;
+    }
+
+    // initialize the verification context.
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx)
+    {
+        std::cerr << "Failed to create EVP_MD_CTX.\n";
+        EVP_PKEY_free(publicKey);
+        return false;
+    }
+
+    if (1 != EVP_VerifyInit(ctx, EVP_sha256()))
+    {
+        std::cerr << "EVP_VerifyInit failed.\n";
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(publicKey);
+        return false;
+    }
+
+    // open the file to verify.
+    std::ifstream file(filePath, std::ifstream::binary);
+    if (!file)
+    {
+        std::cerr << "Unable to open file for verification: " << filePath << "\n";
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(publicKey);
+        return false;
+    }
+
+    char buffer[8192];
+    // read the file in chunks and update the digest.
+    while (file.read(buffer, sizeof(buffer)))
+    {
+        if (1 != EVP_VerifyUpdate(ctx, buffer, file.gcount()))
+        {
+            std::cerr << "EVP_VerifyUpdate failed.\n";
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(publicKey);
+            return false;
+        }
+    }
+    // handle any remaining bytes.
+    if (file.gcount() > 0)
+    {
+        if (1 != EVP_VerifyUpdate(ctx, buffer, file.gcount()))
+        {
+            std::cerr << "EVP_VerifyUpdate failed.\n";
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(publicKey);
+            return false;
+        }
+    }
+
+    // read the signature from the signature file.
+    std::ifstream sigFile(signatureFile, std::ifstream::binary);
+    if (!sigFile)
+    {
+        std::cerr << "Unable to open signature file for reading: " << signatureFile << "\n";
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(publicKey);
+        return false;
+    }
+    sigFile.seekg(0, std::ios::end);
+    std::streamsize sigLen = sigFile.tellg();
+    sigFile.seekg(0, std::ios::beg);
+    unsigned char *signature = new unsigned char[sigLen];
+    if (!sigFile.read(reinterpret_cast<char *>(signature), sigLen))
+    {
+        std::cerr << "Failed to read signature data.\n";
+        delete[] signature;
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(publicKey);
+        return false;
+    }
+
+    // verification.
+    int verifyStatus = EVP_VerifyFinal(ctx, signature, sigLen, publicKey);
+
+    // cleanup.
+    delete[] signature;
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(publicKey);
+
+    if (verifyStatus == 1)
+    {
+        return true; // signature is valid.
+    }
+    else if (verifyStatus == 0)
+    {
+        std::cerr << "Signature verification failed: Invalid signature.\n";
+        return false;
+    }
+    else
+    {
+        std::cerr << "Signature verification failed: An error occurred.\n";
+        return false;
+    }
+}
