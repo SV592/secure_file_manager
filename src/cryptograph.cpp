@@ -63,6 +63,8 @@ bool CryptoManager::encryptFile(const std::string &inputFile, const std::string 
     if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
     {
         std::cerr << "EVP_EncryptInit_ex failed\n";
+        std::cerr << "Error: ";
+        ERR_print_errors_fp(stderr);
         EVP_CIPHER_CTX_free(ctx);
         return false;
     }
@@ -124,9 +126,38 @@ bool CryptoManager::decryptFile(const std::string &inputFile, const std::string 
         return false;
     }
 
-    // decryption key and IV (demo purposes only).
-    unsigned char key[32] = {0}; // 256-bit key (all zeros for demo)
-    unsigned char iv[16] = {0};  // 128-bit IV (all zeros for demo)
+    // Decryption key and IV (read from file)
+    unsigned char key[32]; // 256-bit key
+    unsigned char iv[16];  // 128-bit IV
+
+    // Read the key and IV from the file
+    std::ifstream keyFile("key_iv.bin", std::ifstream::binary);
+    if (!keyFile)
+    {
+        std::cerr << "Failed to open key file\n";
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    // Read the key
+    keyFile.read(reinterpret_cast<char *>(key), sizeof(key));
+    if (keyFile.gcount() != sizeof(key))
+    {
+        std::cerr << "Failed to read the encryption key from key file\n";
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    // Read the IV
+    keyFile.read(reinterpret_cast<char *>(iv), sizeof(iv));
+    if (keyFile.gcount() != sizeof(iv))
+    {
+        std::cerr << "Failed to read the IV from key file\n";
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    keyFile.close();
 
     // decryption operation with AES-256-CBC.
     if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
@@ -182,7 +213,7 @@ bool CryptoManager::decryptFile(const std::string &inputFile, const std::string 
     return true;
 }
 
-// hash file
+// hash function
 std::string CryptoManager::hashFile(const std::string &filePath)
 {
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -192,10 +223,12 @@ std::string CryptoManager::hashFile(const std::string &filePath)
     if (!SHA256_Init(&sha256))
     {
         std::cerr << "SHA256_Init failed.\n";
+        std::cerr << "Error: ";
+        ERR_print_errors_fp(stderr);
         return "";
     }
 
-    // binary mode.
+    // open the file in binary mode.
     std::ifstream file(filePath, std::ifstream::binary);
     if (!file)
     {
@@ -204,25 +237,41 @@ std::string CryptoManager::hashFile(const std::string &filePath)
     }
 
     char buffer[8192];
-    // read the file in chunks and update the hash.
+
+    // read the file in chunks and update the hash computation.
     while (file.read(buffer, sizeof(buffer)))
     {
-        SHA256_Update(&sha256, buffer, file.gcount());
-    }
-    // remaining bytes.
-    if (file.gcount() > 0)
-    {
-        SHA256_Update(&sha256, buffer, file.gcount());
+        if (!SHA256_Update(&sha256, buffer, file.gcount()))
+        {
+            std::cerr << "SHA256_Update failed\n";
+            std::cerr << "Error: ";
+            ERR_print_errors_fp(stderr);
+            return "";
+        }
     }
 
-    // finalize the hash computation.
+    // handle any remaining bytes.
+    if (file.gcount() > 0)
+    {
+        if (!SHA256_Update(&sha256, buffer, file.gcount()))
+        {
+            std::cerr << "SHA256_Update failed for remaining bytes.\n";
+            std::cerr << "Error: ";
+            ERR_print_errors_fp(stderr);
+            return "";
+        }
+    }
+
+    // finalize the hash computation to produce the digest.
     if (!SHA256_Final(hash, &sha256))
     {
         std::cerr << "SHA256_Final failed.\n";
+        std::cerr << "Error: ";
+        ERR_print_errors_fp(stderr);
         return "";
     }
 
-    // convert the hash to a hexadecimal string.
+    // convert the digest to a hexadecimal string.
     std::stringstream ss;
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
     {
@@ -309,7 +358,9 @@ bool CryptoManager::signFile(const std::string &filePath, const std::string &sig
     // finalize the signing operation.
     if (1 != EVP_SignFinal(ctx, signature, &sigLen, privateKey))
     {
-        std::cerr << "EVP_SignFinal failed.\n";
+        std::cerr << "EVP_SignFinal failed\n";
+        std::cerr << "Error: ";
+        ERR_print_errors_fp(stderr);
         delete[] signature;
         EVP_MD_CTX_free(ctx);
         EVP_PKEY_free(privateKey);
