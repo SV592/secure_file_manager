@@ -5,6 +5,8 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/err.h>
+#include <openssl/sha.h>
+#include <openssl/rand.h>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -36,9 +38,26 @@ bool CryptoManager::encryptFile(const std::string &inputFile, const std::string 
     }
 
     // encryption key and IV.
-    //  hardcoded for demo purposes only
-    unsigned char key[32] = {0}; // 256-bit key (all zeros for demo)
-    unsigned char iv[16] = {0};  // 128-bit IV (all zeros for demo)
+    unsigned char key[32]; // 256-bit key
+    unsigned char iv[16];  // 128-bit IV
+    if (!RAND_bytes(key, sizeof(key)) || !RAND_bytes(iv, sizeof(iv)))
+    {
+        std::cerr << "Failed to generate random key or IV\n";
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+
+    // Save the key and IV to a file for decryption
+    std::ofstream keyFile("key_iv.bin", std::ofstream::binary);
+    if (!keyFile)
+    {
+        std::cerr << "Failed to create key file\n";
+        EVP_CIPHER_CTX_free(ctx);
+        return false;
+    }
+    keyFile.write(reinterpret_cast<char *>(key), sizeof(key));
+    keyFile.write(reinterpret_cast<char *>(iv), sizeof(iv));
+    keyFile.close();
 
     // encryption operation with AES-256-CBC.
     if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))

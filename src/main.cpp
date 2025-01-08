@@ -3,10 +3,18 @@
 #include <iostream>
 #include <string>
 #include "cryptography.h"
+#include "utils.h"
 
 // entry point
 int main(int argc, char *argv[])
 {
+
+    // display usage instructions.
+    if (argc < 2)
+    {
+        Utils::printUsage();
+        return 1;
+    }
 
     // parse command.
     std::string command = argv[1];
