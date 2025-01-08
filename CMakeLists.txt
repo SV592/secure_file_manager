@@ -14,7 +14,7 @@ find_package(OpenSSL REQUIRED)
 include_directories(include)
 
 # Add executable
-add_executable(secure_file_manager src/main.cpp src/crypto.cpp src/utils.cpp)
+add_executable(secure_file_manager src/main.cpp src/cryptography.cpp)
 
 # Link OpenSSL libraries
 target_link_libraries(secure_file_manager OpenSSL::SSL OpenSSL::Crypto)

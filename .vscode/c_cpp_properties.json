@@ -3,6 +3,25 @@
         {
             "name": "Win32",
             "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\OpenSSL-Win64\\include",
+                "C:\\OpenSSL-Win64\\lib",
+                "C:\\OpenSSL-Win64\\bin"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        },
+        {
+            "name": "path",
+            "includePath": [
                 "${workspaceFolder}/**"
             ],
             "defines": [
