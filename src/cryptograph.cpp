@@ -162,3 +162,53 @@ bool CryptoManager::decryptFile(const std::string &inputFile, const std::string 
     EVP_CIPHER_CTX_free(ctx);
     return true;
 }
+
+// hash file
+std::string CryptoManager::hashFile(const std::string &filePath)
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256;
+
+    // initialize SHA-256 context.
+    if (!SHA256_Init(&sha256))
+    {
+        std::cerr << "SHA256_Init failed.\n";
+        return "";
+    }
+
+    // binary mode.
+    std::ifstream file(filePath, std::ifstream::binary);
+    if (!file)
+    {
+        std::cerr << "Unable to open file for hashing: " << filePath << "\n";
+        return "";
+    }
+
+    char buffer[8192];
+    // read the file in chunks and update the hash.
+    while (file.read(buffer, sizeof(buffer)))
+    {
+        SHA256_Update(&sha256, buffer, file.gcount());
+    }
+    // remaining bytes.
+    if (file.gcount() > 0)
+    {
+        SHA256_Update(&sha256, buffer, file.gcount());
+    }
+
+    // finalize the hash computation.
+    if (!SHA256_Final(hash, &sha256))
+    {
+        std::cerr << "SHA256_Final failed.\n";
+        return "";
+    }
+
+    // convert the hash to a hexadecimal string.
+    std::stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+
+    return ss.str();
+}
