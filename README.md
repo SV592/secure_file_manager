@@ -1,7 +1,6 @@
 # Secure File Manager
 
 C++ application for secure file encryption, decryption, hashing, and digital signature management. This project leverages OpenSSL for cryptographic operations and a command-line interface. 
-Future plans include a front-end GUI for enhanced usability.
 
 ## Features
 
